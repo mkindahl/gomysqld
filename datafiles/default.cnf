@@ -1,0 +1,21 @@
+		"mysqladmin": Section{
+			"socket": server.Socket,
+			"user":   "root",
+			"host":   server.Host,
+			"port":   strconv.Itoa(server.Port),
+		},
+
+		"mysqld": Section{
+			"basedir":   baseDir,
+			"datadir":   dataDir,
+			"socket":    server.Socket,
+			"port":      strconv.Itoa(server.Port),
+			"pid-file":  pidFile,
+			"server-id": strconv.Itoa(serverId),
+		},
+
+		"mysql": Section{
+			"protocol": "tcp",
+			"host":     server.Host,
+			"port":     strconv.Itoa(server.Port),
+			"prompt":   "'" + name + "> '",
