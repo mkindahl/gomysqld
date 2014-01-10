@@ -3,18 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
+	"mysqld/cmd"
 	"mysqld/stable"
 )
 
 var flagRoot string
 
-var initCmd = Command{
-	brief:    "Initialize the MySQL Server stable",
-	synopsis: "LOCATION",
-	description: `This command will create an empty stable in the location where
+var initCmd = cmd.Command{
+	Brief:    "Initialize the MySQL Server stable",
+	Synopsis: "LOCATION",
+	Description: `This command will create an empty stable in the location where
 distributions and server can be added.`,
-	skipStable: true,
-	body: func(ctx *Context, args []string) error {
+	SkipStable: true,
+	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		// Check the number of arguments and provide a reasonable
 		// error message
 		if len(args) != 1 {
@@ -32,24 +33,16 @@ distributions and server can be added.`,
 	},
 }
 
-var listGrp = Group{
-	brief: "Commands for listing things",
-	description: `This group contain commands for listing all kinds of things regarding
-the stable.`,
+var addGrp = cmd.Group{
+	Brief: "Commands for adding things",
 }
 
-var addGrp = Group{
-	brief: "Commands for adding things",
-}
-
-var removeGrp = Group{
-	brief: "Commands for removing things",
+var removeGrp = cmd.Group{
+	Brief: "Commands for removing things",
 }
 
 func init() {
 	flag.StringVar(&flagRoot, "root", ".", "Root directory for stable")
-	context.RegisterGroup([]string{"list"}, &listGrp)
-	context.RegisterGroup([]string{"add"}, &addGrp)
 
 	context.RegisterCommand([]string{"init"}, &initCmd)
 }

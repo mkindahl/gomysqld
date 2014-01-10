@@ -1,20 +1,24 @@
-package main
+package cmd
 
 import (
+	"flag"
 	"fmt"
 	"io"
+	"log"
 	"mysqld/stable"
+	"os"
 	"strings"
+	"text/tabwriter"
 	"text/wrapper"
 )
 
-// Item is a common interface for any items registered in a command
+// Node is a common interface for any items registered in a command
 // tree.
-type Item interface {
-	Locate([]string) (*Command, Item, []string)
-	Register([]string, Item) error
+type Node interface {
+	Locate([]string) (*Command, Node, []string)
+	Register([]string, Node) error
 	PrintHelp(io.Writer)
-	Brief() string
+	Summary() string
 }
 
 // Command is the implemention of a commands in the utility. They
@@ -24,10 +28,14 @@ type Item interface {
 // give the arguments after the actual command: the command will be
 // automatically added whenever necessary.
 type Command struct {
-	path, synopsis     string
-	brief, description string
-	body               func(*Context, []string) error
-	skipStable         bool
+	Synopsis           string
+	Brief, Description string
+	Body               func(*Context, *Command, []string) error
+	Init               func(*Command)
+	SkipStable         bool
+	Flags              *flag.FlagSet
+
+	path []string
 }
 
 // Run will run a command using a specific context. Arguments for the
@@ -39,8 +47,8 @@ type Command struct {
 func (cmd *Command) Run(ctx *Context, args []string) error {
 	// Try to open the stable. It is OK if it cannot be opened
 	// since some commands do not need it to be open.
-	if !cmd.skipStable {
-		stable, err := stable.OpenStable(ctx.Root)
+	if !cmd.SkipStable {
+		stable, err := stable.OpenStable(ctx.RootDir)
 		if err != nil {
 			return err
 		}
@@ -55,7 +63,13 @@ func (cmd *Command) Run(ctx *Context, args []string) error {
 	// This execute the main body of the command with the context
 	// set up properly. In case of an error, we do not write back
 	// the configuration and instead just return.
-	err := cmd.body(ctx, args)
+	if err := cmd.Flags.Parse(args); err != nil {
+		return err
+	}
+
+	log.Println("Calling", cmd.path, "with", args)
+	err := cmd.Body(ctx, cmd, cmd.Flags.Args())
+	log.Println("Remaining arguments:", cmd.Flags.Args())
 	if err != nil {
 		return err
 	}
@@ -63,7 +77,7 @@ func (cmd *Command) Run(ctx *Context, args []string) error {
 	// Write back the configuration in case the command made
 	// changes to the configuration. There is no point in writing
 	// back the configuration if there is no stable.
-	if !cmd.skipStable {
+	if !cmd.SkipStable {
 		err := ctx.Stable.WriteConfig()
 		if err != nil {
 			return err
@@ -72,40 +86,80 @@ func (cmd *Command) Run(ctx *Context, args []string) error {
 	return nil
 }
 
-func (cmd *Command) Locate(args []string) (*Command, Item, []string) {
+func (cmd *Command) setup(path []string) {
+	// Set up the path to the command
+	cmd.path = make([]string, len(path))
+	copy(cmd.path, path)
+
+	// Create a new flag set for the command options
+	cmd.Flags = flag.NewFlagSet("Options", 0)
+
+	// Call the init function, if it was defined.
+	if cmd.Init != nil {
+		cmd.Init(cmd)
+	}
+}
+
+func (cmd *Command) Locate(args []string) (*Command, Node, []string) {
 	return cmd, cmd, args
 }
 
-func (cmd *Command) Register(words []string, item Item) error {
+func (cmd *Command) Register(words []string, node Node) error {
 	return fmt.Errorf("Command already registered")
+}
+
+func (cmd *Command) Summary() string {
+	return cmd.Brief
 }
 
 func (cmd *Command) PrintHelp(w io.Writer) {
 	wrap := wrapper.New()
-	fmt.Fprintf(w, "%s - %s", cmd.path, cmd.brief)
-	fmt.Fprintf(w, "Usage: %s\n", cmd.synopsis)
-	descr := strings.Join(wrap.Wrap(cmd.description), "\n")
-	fmt.Fprintf(w, "Description:\n%s\n", descr)
-}
+	wrap.FirstIndent = "  "
+	wrap.DefaultIndent = wrap.FirstIndent
 
-func (cmd *Command) Brief() string {
-	return cmd.brief
+	// Command name with brief and synopsis
+	pathStr := strings.Join(cmd.path, " ")
+	fmt.Fprintf(w, "\n%s - %s\n\n", pathStr, cmd.Brief)
+	fmt.Fprintf(w, "Usage: %s %s\n\n", pathStr, cmd.Synopsis)
+
+	// Description
+	descr := strings.Join(wrap.Wrap(cmd.Description), "\n")
+	fmt.Fprintf(w, "Description:\n%s\n", descr)
+
+	// Options
+	hdrPrint := false
+	tw := tabwriter.NewWriter(os.Stdout, 8, 0, 2, ' ', tabwriter.AlignRight)
+	cmd.Flags.VisitAll(func(flag *flag.Flag) {
+		if !hdrPrint {
+			fmt.Fprintf(w, "\nOptions:\n")
+			hdrPrint = true
+		}
+
+		def := ""
+		if len(flag.DefValue) > 0 {
+			def = fmt.Sprintf("(default %q)", flag.DefValue)
+		}
+		fmt.Fprintf(tw, "-%s\t%s%s\t\n", flag.Name, flag.Usage, def)
+	})
+	tw.Flush()
 }
 
 // Group is a stucture to hold information about a group of commands
 // in the command structure. Each command group can contain a list of
 // subgroups that can refine to commands or further to subgroups.
 type Group struct {
-	brief       string
-	description string
-	subgroup    map[string]Item
+	Brief       string
+	Description string
+
+	subgroup map[string]Node
+	path     []string
 }
 
 // Locate will return a pointer to the command matching a prefix of
 // the provided arguments. If more arguments are provided than needed,
 // a slice of the remaining ones are returned. If the command cannot
 // be located, the best matching node is returned.
-func (grp *Group) Locate(args []string) (*Command, Item, []string) {
+func (grp *Group) Locate(args []string) (*Command, Node, []string) {
 	// If there are no arguments left and we have reached a group,
 	// we cannot locate a command.
 	if len(args) == 0 {
@@ -113,7 +167,7 @@ func (grp *Group) Locate(args []string) (*Command, Item, []string) {
 	}
 
 	// Collect the candidates for matching
-	candidates := []Item{}
+	candidates := []Node{}
 	for key, reg := range grp.subgroup {
 		if strings.HasPrefix(key, args[0]) {
 			candidates = append(candidates, reg)
@@ -133,7 +187,7 @@ func (grp *Group) Locate(args []string) (*Command, Item, []string) {
 // Register will allow a command or group to be registered. If it
 // cannot be registered under the provided words, an error will be
 // returned.
-func (grp *Group) Register(words []string, item Item) error {
+func (grp *Group) Register(words []string, node Node) error {
 	if len(words) == 0 {
 		return fmt.Errorf("Path need to be length 1 or more")
 	}
@@ -142,11 +196,11 @@ func (grp *Group) Register(words []string, item Item) error {
 		if len(words) == 1 {
 			return fmt.Errorf("Path already used, at %q", words[0])
 		} else {
-			return reg.Register(words[1:], item)
+			return reg.Register(words[1:], node)
 		}
 	} else {
 		if len(words) == 1 {
-			grp.subgroup[words[0]] = item
+			grp.subgroup[words[0]] = node
 		} else {
 			return fmt.Errorf("Path is missing a group, at %q", words[0])
 		}
@@ -156,14 +210,27 @@ func (grp *Group) Register(words []string, item Item) error {
 
 func (grp *Group) PrintHelp(w io.Writer) {
 	wrap := wrapper.New()
-	descr := strings.Join(wrap.Wrap(grp.description), "\n")
-	fmt.Fprintf(w, "Description:\n%s\n", descr)
+	wrap.FirstIndent = "  "
+	wrap.DefaultIndent = wrap.FirstIndent
+
+	// Brief, with an optional path to the group name
+	if len(grp.path) > 0 {
+		fmt.Fprintf(w, "\n%s - %s\n\n", strings.Join(grp.path, " "), grp.Brief)
+	} else {
+		fmt.Fprintf(w, "\n%s\n\n", grp.Brief)
+	}
+
+	// Description
+	descr := strings.Join(wrap.Wrap(grp.Description), "\n")
+	fmt.Fprintf(w, "Description:\n%s\n\n", descr)
+
+	// Print available subgroups
 	fmt.Fprintf(w, "Available subgroups:\n")
 	for k, v := range grp.subgroup {
-		fmt.Fprintf(w, "    %-14s %s\n", k, v.Brief())
+		fmt.Fprintf(w, "    %-14s %s\n", k, v.Summary())
 	}
 }
 
-func (grp *Group) Brief() string {
-	return grp.brief
+func (grp *Group) Summary() string {
+	return grp.Brief
 }

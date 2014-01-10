@@ -2,19 +2,20 @@ package main
 
 import (
 	"fmt"
+	"mysqld/cmd"
 	"os"
 	"path/filepath"
 )
 
-var context *Context = NewContext()
+var context *cmd.Context = cmd.NewContext("Available subgroups")
 
 func main() {
-	context.Root = flagRoot
+	context.RootDir = flagRoot
 	prog := filepath.Base(os.Args[0])
 
 	if len(os.Args) == 1 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <command> ...\n", prog)
-		context.tree.PrintHelp(os.Stderr)
+		context.Top.PrintHelp(os.Stderr)
 		os.Exit(2)
 	}
 

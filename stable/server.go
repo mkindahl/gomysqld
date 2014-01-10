@@ -265,11 +265,10 @@ func (stable *Stable) DelServer(srv *Server) error {
 	if err := srv.teardown(); err != nil {
 		return err
 	}
-	
+
 	delete(stable.Server, srv.Name)
 	return nil
 }
-
 
 func (s *Server) SocketDsn() string {
 	return fmt.Sprintf("%v:%v@unix(%v)/%v", s.User, s.password, s.Socket, s.database)

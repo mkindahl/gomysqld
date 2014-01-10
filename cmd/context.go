@@ -1,9 +1,16 @@
-package main
+// Package that support command trees and allow you to have a
+// hierarchy of commands and register groups of commands in a way
+// similar to how GDB works.
+//
+// The commands are separated into groups, where each group can
+// contain either subgroups or specicif commands. This allow you to
+// add command hierarchies such as "show servers" (where "show" is a
+// group and "show servers" is the real command).
+package cmd
 
 import (
 	"fmt"
 	"io"
-	"log"
 	"mysqld/stable"
 	"strings"
 )
@@ -15,7 +22,7 @@ import (
 // function.
 type RunError struct {
 	Err   error
-	Where Item
+	Where Node
 }
 
 func (err *RunError) Error() string {
@@ -36,17 +43,17 @@ func (err *RunError) PrintHelp(w io.Writer) {
 // context when executing so that they can look up such items while
 // executing.
 type Context struct {
-	Root   string
-	tree   Item
-	Stable *stable.Stable
+	RootDir string
+	Top     *Group
+	Stable  *stable.Stable
 }
 
 // NewContext will create a new context.
-func NewContext() *Context {
+func NewContext(summary string) *Context {
 	context := &Context{
-		tree: &Group{
-			brief:    "Basic commands",
-			subgroup: make(map[string]Item),
+		Top: &Group{
+			Brief:    summary,
+			subgroup: make(map[string]Node),
 		},
 	}
 
@@ -57,29 +64,51 @@ func NewContext() *Context {
 // sequence of words. Each word before the last one is expected to
 // hold a group, while the last word should not be registered for the
 // group.
-func (ctx *Context) RegisterCommand(words []string, cmd *Command) error {
-	return ctx.tree.Register(words, cmd)
+func (ctx *Context) RegisterCommand(words []string, cmd *Command) {
+	err := ctx.Top.Register(words, cmd)
+	if err == nil {
+		cmd.setup(words)
+	} else {
+		panic(err.Error())
+	}
 }
 
 // RegisterGroup will register a new group under the given sequence of
 // words. Each word before the last one is expected to hold a group,
 // while the last word should not be registered for the group.
-func (ctx *Context) RegisterGroup(words []string, group *Group) error {
-	if group.subgroup == nil {
-		group.subgroup = make(map[string]Item)
+func (ctx *Context) RegisterGroup(words []string, grp *Group) {
+	if grp.subgroup == nil {
+		grp.subgroup = make(map[string]Node)
 	}
-	return ctx.tree.Register(words, group)
+	err := ctx.Top.Register(words, grp)
+	if err == nil {
+		grp.path = make([]string, len(words))
+		copy(grp.path, words)
+	} else {
+		panic(err.Error())
+	}
+}
+
+// Locate a command given a sequence of words.
+//
+// If a command is successfully found, a pointer to it will be
+// returned together with the node (this will always be a command) and
+// the remaining words.
+//
+// If the command is not found, nil will be returned together with the
+// node containing the first mismatch (this will always be a group)
+// and the remaining words that could not be matched.
+func (ctx *Context) Locate(words []string) (*Command, Node, []string) {
+	return ctx.Top.Locate(words)
 }
 
 // RunCommand will run the command given by the words. In the event of
 // a failure, a run error is returned containing information about the
 // error and where the failure occured.
 func (ctx *Context) RunCommand(words []string) *RunError {
-	log.Printf("words: %v, len(words): %d", words, len(words))
-
 	// Locate the command and compute the arguments to the command
 	// by recursively going through the command tree.
-	cmd, node, args := ctx.tree.Locate(words)
+	cmd, node, args := ctx.Top.Locate(words)
 	if cmd == nil {
 		// Find the first unrecognized word, or if all words
 		// are recognized, find the last word in the list.
@@ -87,11 +116,11 @@ func (ctx *Context) RunCommand(words []string) *RunError {
 		if end < cap(words) {
 			end++
 		}
-		err := fmt.Errorf("Command not found: %q\n", strings.Join(words[:end], " "))
+		err := fmt.Errorf("Command not found: %q", strings.Join(words[:end], " "))
 		return &RunError{Err: err, Where: node}
 	}
 
-	if err := cmd.Run(context, args); err != nil {
+	if err := cmd.Run(ctx, args); err != nil {
 		return &RunError{Err: err, Where: node}
 	}
 	return nil

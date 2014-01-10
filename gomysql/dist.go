@@ -2,34 +2,42 @@ package main
 
 import (
 	"fmt"
+	"mysqld/cmd"
+	"os"
+	"text/tabwriter"
 )
 
-var addDistCmd = Command{
-	brief:    "Add a distribution to the stable",
-	synopsis: "add distribution PATH",
-	body: func(ctx *Context, args []string) error {
+var addDistCmd = cmd.Command{
+	Brief:    "Add a distribution to the stable",
+	Synopsis: "add distribution PATH",
+	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		_, err := ctx.Stable.AddDist(args[0])
 		return err
 	},
+
+	Init: func(cmd *cmd.Command) {
+		cmd.Flags.String("name", "", "Name of distribution, if different from directory name")
+	},
 }
 
-var listDistCmd = Command{
-	brief:    "List information about distributions",
-	synopsis: "list distributions",
-	body: func(ctx *Context, args []string) error {
+var listDistCmd = cmd.Command{
+	Brief:    "List information about distributions",
+	Synopsis: "list distributions",
+	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
+		tw := tabwriter.NewWriter(os.Stdout, 8, 0, 2, ' ', tabwriter.AlignRight)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t\n", "NAME", "VERSION", "SERVER VERSION")
 		for _, dist := range ctx.Stable.Distro {
-			fmt.Printf("%s\n", dist.Name)
-			fmt.Printf("\t      Version: %s\n", dist.Version)
-			fmt.Printf("\tServerVersion: %s\n", dist.ServerVersion)
+			fmt.Fprintf(tw, "%s\t%s\t%s\t\n", dist.Name, dist.Version, dist.ServerVersion)
 		}
+		tw.Flush()
 		return nil
 	},
 }
 
-var removeDistCmt = Command{
-	brief:    "Remove a distribution from the stable",
-	synopsis: "NAME",
-	body: func(ctx *Context, args []string) error {
+var removeDistCmt = cmd.Command{
+	Brief:    "Remove a distribution from the stable",
+	Synopsis: "NAME",
+	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		// Locate the distribution with the given name
 
 		// Remove all servers using the distribution, we
@@ -43,7 +51,13 @@ var removeDistCmt = Command{
 	},
 }
 
+var distGrp = cmd.Group{
+	Brief:       "Commands for working with distributions",
+	Description: `All commands for working with distributions are in this group. `,
+}
+
 func init() {
-	context.RegisterCommand([]string{"add", "distribution"}, &addDistCmd)
-	context.RegisterCommand([]string{"list", "distributions"}, &listDistCmd)
+	context.RegisterGroup([]string{"distribution"}, &distGrp)
+	context.RegisterCommand([]string{"distribution", "add"}, &addDistCmd)
+	context.RegisterCommand([]string{"distribution", "show"}, &listDistCmd)
 }

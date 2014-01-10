@@ -2,28 +2,27 @@ package main
 
 import (
 	"fmt"
-	"strings"
+	"mysqld/cmd"
 	"os"
+	"strings"
 )
 
-var helpCmd = Command{
-	brief:       "Give help on commands",
-	synopsis:    "WORD ...",
-	description: "Provide basic help on a the command designated by the list of words.",
-	body: func(ctx *Context, args []string) error {
+var helpCmd = cmd.Command{
+	Brief:       "Give help on commands and groups",
+	Synopsis:    "WORD ...",
+	Description: `Show the help text for the command or group under the words given. If there are any extreneous words, an error message will be given instead and the help not printed.`,
+	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		// If no arguments were given, we show help on "help"
 		if len(args) == 0 {
 			args = []string{"help"}
 		}
 
 		// Locate command
-		_, node, rest := ctx.tree.Locate(args)
+		_, node, rest := ctx.Locate(args)
 		if len(rest) > 0 {
 			return fmt.Errorf("Extreneous arguments to help command: %q", strings.Join(rest, " "))
 		}
 
-		fmt.Println(node.Brief())
-		// Options
 		node.PrintHelp(os.Stdout)
 		return nil
 	},

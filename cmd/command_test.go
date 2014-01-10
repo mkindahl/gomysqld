@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"testing"
@@ -16,7 +16,7 @@ func compareSlices(t *testing.T, result, expected []string) {
 	}
 }
 
-func checkCommand(t *testing.T, tree Item, loc, remaining []string, cmd *Command) {
+func checkCommand(t *testing.T, tree Node, loc, remaining []string, cmd *Command) {
 	c, _, as := tree.Locate(loc)
 	if c != cmd {
 		t.Errorf("Expected %v, got %v", cmd, c)
@@ -31,7 +31,7 @@ func checkCommand(t *testing.T, tree Item, loc, remaining []string, cmd *Command
 // as the command words. The expected remaining arguments are matched
 // against what Locate return, and the validation function is called
 // on the group to validate that it is correct.
-func checkGroup(t *testing.T, tree Item, words, remaining []string, validate func(Item) bool) {
+func checkGroup(t *testing.T, tree Node, words, remaining []string, validate func(Node) bool) {
 	c, n, as := tree.Locate(words)
 	if c != nil {
 		t.Errorf("Expected nothing, got %v", c)
@@ -44,19 +44,19 @@ func checkGroup(t *testing.T, tree Item, words, remaining []string, validate fun
 
 func TestGroup(t *testing.T) {
 	tree := &Group{
-		brief:    "Just a test",
-		subgroup: make(map[string]Item),
+		Brief:    "Just a test",
+		subgroup: make(map[string]Node),
 	}
 
 	// Register a group to get some nesting tests.
 	group := &Group{
-		brief:    "Another test",
-		subgroup: make(map[string]Item),
+		Brief:    "Another test",
+		subgroup: make(map[string]Node),
 	}
 
 	cmd1 := &Command{
-		brief: "A nested command",
-		body:  func(*Context, []string) error { return nil },
+		Brief: "A nested command",
+		Body:  func(*Context, *Command, []string) error { return nil },
 	}
 
 	if err := tree.Register([]string{"list"}, group); err != nil {
@@ -93,44 +93,44 @@ func TestGroup(t *testing.T) {
 	// Check that we get the correct result when requesting an
 	// incomplete command.
 	args3 := []string{"list"}
-	checkGroup(t, tree, args3, args3[1:], func(node Item) bool {
-		return node.Brief() == "Another test"
+	checkGroup(t, tree, args3, args3[1:], func(node Node) bool {
+		return node.Summary() == "Another test"
 	})
 
 	// Check that the locate works correctly when requesting a
 	// command that do not exist but where an initial prefix is
 	// correct.
 	args5 := []string{"list", "foo"}
-	checkGroup(t, tree, args5, args5[1:], func(node Item) bool {
-		return node.Brief() == "Another test"
+	checkGroup(t, tree, args5, args5[1:], func(node Node) bool {
+		return node.Summary() == "Another test"
 	})
 }
 
 func TestCompletion(t *testing.T) {
 	tree := &Group{
-		brief:    "Just a test",
-		subgroup: make(map[string]Item),
+		Brief:    "Just a test",
+		subgroup: make(map[string]Node),
 	}
 
 	// Register a group to get some nesting tests.
 	listing := &Group{
-		brief:    "Listing things",
-		subgroup: make(map[string]Item),
+		Brief:    "Listing things",
+		subgroup: make(map[string]Node),
 	}
 
 	logging := &Group{
-		brief:    "Logging things",
-		subgroup: make(map[string]Item),
+		Brief:    "Logging things",
+		subgroup: make(map[string]Node),
 	}
 
 	cmd1 := &Command{
-		brief: "A nested command",
-		body:  func(*Context, []string) error { return nil },
+		Brief: "A nested command",
+		Body:  func(*Context, *Command, []string) error { return nil },
 	}
 
 	cmd2 := &Command{
-		brief: "Something else",
-		body:  func(*Context, []string) error { return nil },
+		Brief: "Something else",
+		Body:  func(*Context, *Command, []string) error { return nil },
 	}
 
 	if err := tree.Register([]string{"list"}, listing); err != nil {
@@ -162,13 +162,13 @@ func TestCompletion(t *testing.T) {
 
 func TestBasic(t *testing.T) {
 	tree := &Group{
-		brief:    "Just a test",
-		subgroup: make(map[string]Item),
+		Brief:    "Just a test",
+		subgroup: make(map[string]Node),
 	}
 
 	cmd1 := &Command{
-		brief: "A command",
-		body:  func(*Context, []string) error { return nil },
+		Brief: "A command",
+		Body:  func(*Context, *Command, []string) error { return nil },
 	}
 
 	// Register a command at top level and see if it can be found
