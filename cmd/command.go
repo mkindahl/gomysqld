@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"mysqld/stable"
 	"os"
 	"strings"
@@ -67,9 +66,7 @@ func (cmd *Command) Run(ctx *Context, args []string) error {
 		return err
 	}
 
-	log.Println("Calling", cmd.path, "with", args)
 	err := cmd.Body(ctx, cmd, cmd.Flags.Args())
-	log.Println("Remaining arguments:", cmd.Flags.Args())
 	if err != nil {
 		return err
 	}

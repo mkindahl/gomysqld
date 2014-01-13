@@ -5,7 +5,9 @@
 
 package stable
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestDSN(t *testing.T) {
 	var expected string
@@ -52,6 +54,14 @@ func TestAddServer(t *testing.T) {
 		t.Errorf("No server returned and no error")
 	} else if server.Name != "my_server" {
 		t.Errorf("Server name was %q, expected %q", server.Name, "my_server")
+	}
+
+	srv, ok := stable.Server["my_server"]
+	if !ok || srv != server {
+		t.Errorf("Server %q not added correctly to server list", server.Name)
+	}
+	if srv.PidPath != srv.run("mysqld.pid") {
+		t.Errorf("PidPath should be %q, was %q", srv.PidPath, srv.run("mysqld.pid"))
 	}
 
 	stable.Destroy()

@@ -43,7 +43,6 @@ func (dt *Dist) unpackTar(root, path string) error {
 
 	// Extract the contents of the library
 	cmd := exec.Command("tar", "xzf", path, "-C", root)
-	log.Print("Executing ", cmd.Args)
 	if err := cmd.Run(); err != nil {
 		return err
 	}
@@ -92,7 +91,7 @@ func pathType(path string) int {
 // distributions. If this function finishes successfully, nil is
 // returned, otherwise, an error is returned.
 func (dt *Dist) unpackDist(root, path string) error {
-	//	log.Printf("Unpacking distribution %s into %s\n", path, root)
+	log.Printf("Unpacking distribution %s into %s\n", path, root)
 	switch pathType(path) {
 	case TGZ_PATH:
 		return dt.unpackTar(root, path)
