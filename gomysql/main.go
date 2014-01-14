@@ -1,11 +1,14 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"mysqld/cmd"
 	"os"
 	"path/filepath"
 )
+
+var flagRoot string
 
 var brief = "Utility for managing a stable of MySQL servers"
 
@@ -29,4 +32,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s: %s\n", prog, err)
 		os.Exit(2)
 	}
+}
+
+func init() {
+	flag.StringVar(&flagRoot, "root", ".", "Root directory for stable")
 }

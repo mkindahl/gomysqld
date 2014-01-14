@@ -1,24 +1,24 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"mysqld/cmd"
 	"mysqld/stable"
 )
 
-var flagRoot string
-
 var initCmd = cmd.Command{
 	Brief: "Initialize the MySQL Server stable",
 
 	Description: `This command will create an empty stable in the
-        location where distributions and server can be added. It will
-        also try to find an existing installation and add it as a
-        "remote distribution" so that you can create servers based on
-        what you have installed. This can be useful if you, for
-        example, want to test that some application work the same way
-        on your currently installed servers and some other version.`,
+        location where distributions and server can be added.
+
+        It will also try to find an existing installation and add it
+        as a "synthetic distribution" so that you can create servers
+        based on what you have installed on your machine.
+
+        This can be useful if you, for example, want to test that some
+        application work the same way on your currently installed
+        servers and some other version.`,
 
 	Synopsis:   "LOCATION",
 	SkipStable: true,
@@ -48,7 +48,5 @@ var initCmd = cmd.Command{
 }
 
 func init() {
-	flag.StringVar(&flagRoot, "root", ".", "Root directory for stable")
-
 	context.RegisterCommand([]string{"init"}, &initCmd)
 }

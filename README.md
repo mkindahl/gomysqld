@@ -50,7 +50,7 @@ server. If you want to install your own version, you need to build a
 binary distribution from the source tree and add it to the stable
 using the command:
 
-    gomysql add distribution mysql-5.1.71-linux-x86_64-glibc23.tar.gz
+    gomysql add dist mysql-5.1.71-linux-x86_64-glibc23.tar.gz
 
 If the distribution is an archive, the binary distribution will be
 copied into the stable directory, but if a directory is given, a soft
@@ -60,16 +60,22 @@ link will be created in the stable.
 ### Working with Servers
 
 Servers are created from distributions and you can create as many
-servers as you like. When creating a server, a distribution name need
-to be provided. However, since distribution names can be quite long,
-it is sufficient to provide a unambigous substring of the distribution
-name.
+servers as you like. When creating a server, a distribution name can
+be provided using the `-dist` flag. However, since distribution names
+can be quite long, it is sufficient to provide a unambigous substring
+of the distribution name.
 
-    gomysql add server my_server 5.1.71-linux
+    gomysql server add -dist=5.1.71 my_server
+
+If no distribution is provided, a match of all distributions is done,
+which means that if you have a single distribution, it will pick that
+one.
+
+    gomysql server add my_server
 
 Once you are done with the server, you can remove it using:
 
-    gomysql remove server my_server
+    gomysql server remove my_server
 
 
 Developer Notes
@@ -91,9 +97,3 @@ distribution, use the `-version` flag:
 
 Tests that require a distribution or an expected version to work will
 be skipped if no distribution or expected version is provided.
-
-Normally the tests remove the stable after being executed, but if you
-want to debug the problem and check the stable that were created, you
-can prevent it from being removed by using the flag `-keep`:
-
-    go test -keep=true

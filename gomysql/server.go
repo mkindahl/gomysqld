@@ -102,8 +102,10 @@ var addServerCmd = cmd.Command{
 var removeServerCmd = cmd.Command{
 	Brief: "Remove a server from the stable",
 
-	Description: `The named server will be removed from the stable and all
-	associated files removed.`,
+	Description: `All servers matching the provided pattern will
+	be removed from the stable and all associated files
+	removed. Before the servers are removed, they will be
+	stopped.`,
 
 	Synopsis: "PAT",
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
@@ -113,6 +115,7 @@ var removeServerCmd = cmd.Command{
 			return ErrNoServerName
 		}
 
+		// Find matching servers
 		servers, err := ctx.Stable.FindMatchingServers(args[0])
 		if err != nil {
 			return err
@@ -131,8 +134,11 @@ var removeServerCmd = cmd.Command{
 var showServersCmd = cmd.Command{
 	Brief: "Show servers in the stable",
 
-	Description: `A list of the available server instances in the stable is
-	shown together with the status.`,
+	Description: `A list of the available server instances in the
+	stable is shown together with the status. The version shown is
+	retrieved from the server version string shown when using
+	'mysqld --version' and is extracted when the server is
+	created.`,
 
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		if len(args) > 0 {
@@ -140,9 +146,14 @@ var showServersCmd = cmd.Command{
 		}
 
 		tw := tabwriter.NewWriter(os.Stdout, 8, 0, 2, ' ', tabwriter.AlignRight)
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t\n", "NAME", "HOST", "PORT", "VERSION", "STATUS")
+		fmt.Fprintf(tw,
+			"%s\t%s\t%s\t%s\t%s\t\n",
+			"NAME", "HOST", "PORT", "VERSION", "STATUS")
 		for _, srv := range ctx.Stable.Server {
-			fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\t\n", srv.Name, srv.Host, srv.Port, srv.Dist.ServerVersion, srv.Status())
+			fmt.Fprintf(tw,
+				"%s\t%s\t%d\t%s\t%s\t\n",
+				srv.Name, srv.Host, srv.Port,
+				srv.Dist.ServerVersion, srv.Status())
 		}
 		tw.Flush()
 		return nil
@@ -222,7 +233,7 @@ var stopServerCmd = cmd.Command{
 
 			// TODO: Check that the server is local
 			if srv.Status() != stable.SERVER_RUNNING {
-				return fmt.Errorf("Server %q not running", srv.Name)
+				return fmt.Errorf("Server %s not running", srv.Name)
 			}
 
 			if pid, err := srv.Pid(); err != nil {
