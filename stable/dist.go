@@ -62,17 +62,19 @@ func (dt *Dist) unpackZip(root, path string) error {
 	return nil
 }
 
+type DistType int
+
 const (
 	UNKNOWN_PATH = iota
-	TGZ_PATH     = iota
-	TAR_PATH     = iota
-	ZIP_PATH     = iota
-	DIR_PATH     = iota
+	TGZ_PATH
+	TAR_PATH
+	ZIP_PATH
+	DIR_PATH
 )
 
 // pathType will check the name of the of the file and based on this
 // decide what type of distribution it is.
-func pathType(path string) int {
+func pathType(path string) DistType {
 	base := filepath.Base(path)
 	if isTgz, _ := filepath.Match("*.tar.gz", base); isTgz {
 		return TGZ_PATH
@@ -109,13 +111,16 @@ func (dt *Dist) unpackDist(root, path string) error {
 }
 
 const (
-	versionPattern = `^#\s*define\s+MYSQL_SERVER_VERSION\s+.*(\d+\.\d+\.\d+)`
-	definePattern  = `^#\s*define\s+(\w+)\s+(.*)`
+	definePattern = `^#\s*define\s+(\w+)\s+(.*)`
 )
 
 var (
 	defineRegex = regexp.MustCompile(definePattern)
 )
+
+var includeFiles = []string{
+	"include/mysql_version.h",
+}
 
 func (dt *Dist) scanVersionFile(src io.Reader) (outerr error) {
 	// Scan the file to find the version. Right now, only the
@@ -142,10 +147,8 @@ func (dt *Dist) scanVersionFile(src io.Reader) (outerr error) {
 	return
 }
 
-var includeFiles = []string{
-	"include/mysql_version.h",
-}
-
+// checkDistFiles will check that all expected files exists in the
+// distribution.
 func (dt *Dist) checkDistFiles(files []string) error {
 	for _, path := range files {
 		_, err := os.Stat(filepath.Join(dt.Root, path))
@@ -164,7 +167,8 @@ func (dt *Dist) parseVersionString(version string) {
 	}
 }
 
-// fetchInfo will extract information from an unpacked distribution.
+// readVersionFile will extract information from the version file of
+// an unpacked distribution.
 func (dt *Dist) readVersionFile() error {
 	// Open the file containing server version information
 	verFn := filepath.Join(dt.Root, "include", "mysql_version.h")
@@ -209,16 +213,12 @@ func (dt *Dist) setup(stable *Stable, path string) error {
 		return err
 	}
 
-	// Extract information from the distribution. If it is not
-	// possible due to some error, the distribution is removed and
-	// the error reported.
+	// Extract information from the distribution.
 	if err := dt.readVersionFile(); err != nil {
-		os.RemoveAll(dt.Root)
 		return err
 	}
 
 	if err := dt.readServerInfo(); err != nil {
-		os.RemoveAll(dt.Root)
 		return err
 	}
 
@@ -237,7 +237,13 @@ func (stable *Stable) AddDist(path string) (*Dist, error) {
 		return nil, err
 	}
 
+	// Try to set up the distribution. If it is not possible due
+	// to some error, the distribution is removed and the error
+	// reported.
 	if err := dt.setup(stable, path); err != nil {
+		if len(dt.Root) == 0 {
+			os.RemoveAll(dt.Root)
+		}
 		return nil, err
 	}
 
@@ -247,7 +253,7 @@ func (stable *Stable) AddDist(path string) (*Dist, error) {
 
 // DelDist will remove the distribution from the stable, including all
 // servers using the distribution.
-func (stable *Stable) DelDist(name string) error {
+func (stable *Stable) DelDistByName(name string) error {
 	dist, exists := stable.Distro[name]
 	if !exists {
 		return fmt.Errorf("No distribution named %q exists", name)
@@ -257,5 +263,7 @@ func (stable *Stable) DelDist(name string) error {
 			stable.DelServer(srv)
 		}
 	}
+
+	delete(stable.Distro, dist.Name)
 	return nil
 }

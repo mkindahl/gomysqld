@@ -49,11 +49,12 @@ type Context struct {
 }
 
 // NewContext will create a new context.
-func NewContext(summary string) *Context {
+func NewContext(summary, description string) *Context {
 	context := &Context{
 		Top: &Group{
-			Brief:    summary,
-			subgroup: make(map[string]Node),
+			Brief:       summary,
+			Description: description,
+			subgroup:    make(map[string]Node),
 		},
 	}
 

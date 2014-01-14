@@ -35,19 +35,16 @@ var listDistCmd = cmd.Command{
 }
 
 var removeDistCmt = cmd.Command{
-	Brief:    "Remove a distribution from the stable",
+	Brief: "Remove a distribution from the stable",
+
+	Description: `The distribution will be completely removed from
+	the stable, including all servers that are based on that
+	distribution.`,
+
 	Synopsis: "NAME",
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
-		// Locate the distribution with the given name
-
-		// Remove all servers using the distribution, we
-		// should probably prompt for it before doing it.
-		for _, srv := range ctx.Stable.Server {
-			ctx.Stable.DelServer(srv)
-		}
-
 		// Remove the distribution
-		return ctx.Stable.DelDist(args[0])
+		return ctx.Stable.DelDistByName(args[0])
 	},
 }
 

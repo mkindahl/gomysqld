@@ -7,7 +7,13 @@ import (
 	"path/filepath"
 )
 
-var context *cmd.Context = cmd.NewContext("Available subgroups")
+var brief = "Utility for managing a stable of MySQL servers"
+
+var description = `Easy creation and distribution of MySQL
+servers. The utility support running different versions of servers at
+the same time.`
+
+var context *cmd.Context = cmd.NewContext(brief, description)
 
 func main() {
 	context.RootDir = flagRoot

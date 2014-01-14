@@ -7,6 +7,7 @@ import (
 	"mysqld/stable"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -14,90 +15,130 @@ import (
 
 var (
 	ErrNoServerName = errors.New("No server name provided")
+	ErrTooManyArgs  = errors.New("Too many arguments provided")
 )
 
 var srvGrp = cmd.Group{
-	Brief: "Manipulating server instances",
+	Brief: "Group of commands for manipulating server instances",
 
 	Description: `All commands for manipulating and working with
-	server instances are in this group. `,
+	server instances are in this group.`,
 }
 
 var addServerCmd = cmd.Command{
 	Brief:    "Add a server to the stable",
 	Synopsis: "NAME",
 
-	Description: `This command will create a new server using a
-	previously added distribution and add it to the stable. If a
-	value to -dist is given, the distributions having the provided
-	string as substring will be used. If less than or more than
-	one distribution matching, an error will be returned. The
-	default for the distribution is the empty string, which will
-	pick every available distribution, which is convenient if you
-	have only one distribution.`,
+	Description: `This command will create one or more new server using a
+	previously added distribution and add it to the stable.
+
+        If a value to -dist is given, the distributions having the provided
+	string as substring will be used. If less than or more than one
+	distribution matching, an error will be returned. The default for the
+	distribution is the empty string, which will pick every available
+	distribution, which is convenient if you have only one distribution.
+
+        If a value to -count is given, that number of servers are created from
+        the distribution. The name given for the server is then a prefix rather
+        than an absolute name.`,
 
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
-		if len(args) != 1 {
+		distFlag := cmd.Flags.Lookup("dist")
+		countFlag := cmd.Flags.Lookup("count")
+
+		if len(args) == 0 {
 			return ErrNoServerName
+		} else if len(args) > 1 {
+			return ErrTooManyArgs
 		}
 
+		count, err := strconv.Atoi(countFlag.Value.String())
+		if err != nil {
+			return err
+		}
+
+		// Figure out the candidates for distributions
 		candidates := []*stable.Dist{}
-		flag := cmd.Flags.Lookup("dist")
 		for key, dist := range ctx.Stable.Distro {
-			if strings.Contains(key, flag.Value.String()) {
+			if strings.Contains(key, distFlag.Value.String()) {
 				candidates = append(candidates, dist)
 			}
 		}
+
 		if len(candidates) == 0 {
-			return fmt.Errorf("No distribution containing %q", flag.Value.String())
+			return fmt.Errorf("No distribution containing %q", distFlag.Value.String())
 		} else if len(candidates) > 1 {
 			return fmt.Errorf("Ambigous choice.")
 		}
+
 		dist := candidates[0]
 
-		if _, err := ctx.Stable.AddServer(args[0], dist); err != nil {
-			return fmt.Errorf("Unable to create server %s: %s", args[0], err.Error())
+		// Build a list of server names to construct
+		servers := []string{}
+		if count == 0 {
+			servers = append(servers, args[0])
+		} else if count > 0 {
+			for i := 1; i <= count; i++ {
+				servers = append(servers, fmt.Sprintf("%s%d", args[0], i))
+			}
+		}
+
+		// Create the servers
+		for _, name := range servers {
+			// TODO How to handle multiple errors from servers.
+			if _, err := ctx.Stable.AddServer(name, dist); err != nil {
+				return fmt.Errorf("Unable to create server %s: %s", name, err.Error())
+			}
 		}
 		return nil
 	},
 
 	Init: func(cmd *cmd.Command) {
-		cmd.Flags.String("dist", "", "Distribution to create the server from.")
+		cmd.Flags.String("dist", "", "Distribution to create the server from")
+		cmd.Flags.Uint("count", 0, "Number of instances to create")
 	},
 }
 
 var removeServerCmd = cmd.Command{
 	Brief: "Remove a server from the stable",
 
-	Description: `The named server will be removed from the stable
-	and all associated files removed.`,
+	Description: `The named server will be removed from the stable and all
+	associated files removed.`,
 
-	Synopsis: "NAME",
+	Synopsis: "PAT",
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
-		if len(args) != 1 {
+		if len(args) > 1 {
+			return ErrTooManyArgs
+		} else if len(args) == 0 {
 			return ErrNoServerName
 		}
 
-		srv, ok := ctx.Stable.Server[args[0]]
-		if !ok {
-			return fmt.Errorf("No such server: %s", args[0])
+		servers, err := ctx.Stable.FindMatchingServers(args[0])
+		if err != nil {
+			return err
+		} else if len(servers) == 0 {
+			return fmt.Errorf("No servers matching %q", args[0])
 		}
 
-		return ctx.Stable.DelServer(srv)
+		// TODO How to handle multiple errors from servers.
+		for _, srv := range servers {
+			ctx.Stable.DelServer(srv)
+		}
+		return nil
 	},
 }
 
 var showServersCmd = cmd.Command{
 	Brief: "Show servers in the stable",
 
-	Description: `A list of the available server instances in the
-	stable is shown together with the status.`,
+	Description: `A list of the available server instances in the stable is
+	shown together with the status.`,
 
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		if len(args) > 0 {
-			argStr := strings.Join(args, " ")
-			return fmt.Errorf("Wrong number of arguments %q", argStr)
+			return ErrTooManyArgs
 		}
+
 		tw := tabwriter.NewWriter(os.Stdout, 8, 0, 2, ' ', tabwriter.AlignRight)
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t\n", "NAME", "HOST", "PORT", "VERSION", "STATUS")
 		for _, srv := range ctx.Stable.Server {
@@ -111,72 +152,86 @@ var showServersCmd = cmd.Command{
 var startServerCmd = cmd.Command{
 	Brief: "Start a server",
 
-	Description: `The named server will be started in the
-	background. If any options are provided in addition to the
-	name, they will be added to the list of options when starting
-	the server.`,
+	Description: `All servers matching the provided will be started in the
+	background. If any options are provided in addition to the name, they
+	will be added to the list of options when starting the server.`,
 
-	Synopsis: "NAME OPTION ...",
+	Synopsis: "PAT OPTION ...",
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		if len(args) == 0 {
 			return ErrNoServerName
 		}
 
 		// Fetch the server from the stable
-		srv, ok := ctx.Stable.Server[args[0]]
-		if !ok {
-			return fmt.Errorf("No such server: %s", args[0])
-		}
-		// Check if the server is running, i.e., if there is a PID file
-		if srv.Status() == stable.SERVER_RUNNING {
-			return fmt.Errorf("Server %q already running", srv.Name)
+		servers, err := ctx.Stable.FindMatchingServers(args[0])
+		if err != nil {
+			return err
+		} else if len(servers) == 0 {
+			return fmt.Errorf("No servers matching %q", args[0])
 		}
 
-		// Time to do the daemonize fandango
-		argv := []string{
-			filepath.Base(srv.BinPath),
-			fmt.Sprintf("--defaults-file=%s", srv.ConfigFile),
+		// TODO How to handle multiple errors from servers.
+		for _, srv := range servers {
+			// Check if the server is running, i.e., if there is a PID file
+			if srv.Status() == stable.SERVER_RUNNING {
+				return fmt.Errorf("Server %q already running", srv.Name)
+			}
+
+			// Time to do the daemonize fandango
+			argv := []string{
+				filepath.Base(srv.BinPath),
+				fmt.Sprintf("--defaults-file=%s", srv.ConfigFile),
+			}
+			argv = append(argv, args[1:]...)
+			forkDaemon(srv.BinPath, srv.BaseDir, srv.LogPath, argv)
 		}
-		argv = append(argv, args[1:]...)
-		return forkDaemon(srv.BinPath, srv.BaseDir, srv.LogPath, argv)
+		return nil
 	},
 }
 
 var stopServerCmd = cmd.Command{
 	Brief: "Stop a server",
 
-	Description: `The server will be stopped by sending TERM (11)
-	to it. This is the normal shutdown procedure for a graceful
-	shutdown of a server, but it only work when done on the local
-	machine. If an attempt to shut down a server on a remote
-	machine is done, an error will currently be thrown.`,
+	Description: `All servers matching the pattern will be stopped by
+	sending TERM (11) to it. This is the normal shutdown procedure for a
+	graceful shutdown of a server, but it only work when done on the local
+	machine. If an attempt to shut down a server on a remote machine is
+	done, an error will currently be thrown.`,
 
-	Synopsis: "NAME",
+	Synopsis: "PAT",
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
-		if len(args) != 1 {
+		if len(args) == 0 {
 			return ErrNoServerName
+		} else if len(args) > 1 {
+			return ErrTooManyArgs
 		}
 
-		// Fetch the server from the stable
-		srv, ok := ctx.Stable.Server[args[0]]
-		if !ok {
-			return fmt.Errorf("No such server: %s", args[0])
-		}
-
-		if !srv.IsLocal() {
-			return fmt.Errorf("Non-local server: server is at %s", srv.Host)
-		}
-
-		// TODO: Check that the server is local
-		if srv.Status() != stable.SERVER_RUNNING {
-			return fmt.Errorf("Server %q not running", srv.Name)
-		}
-
-		if pid, err := srv.Pid(); err != nil {
+		// Fetch matching servers from the stable
+		servers, err := ctx.Stable.FindMatchingServers(args[0])
+		if err != nil {
 			return err
-		} else {
-			return syscall.Kill(pid, syscall.SIGTERM)
+		} else if len(servers) == 0 {
+			return fmt.Errorf("No servers matching %q", args[0])
 		}
+
+		// TODO How to handle multiple errors from servers.
+		for _, srv := range servers {
+			if !srv.IsLocal() {
+				return fmt.Errorf("Non-local server: server is at %s", srv.Host)
+			}
+
+			// TODO: Check that the server is local
+			if srv.Status() != stable.SERVER_RUNNING {
+				return fmt.Errorf("Server %q not running", srv.Name)
+			}
+
+			if pid, err := srv.Pid(); err != nil {
+				return fmt.Errorf("Server %s: %s", srv.Name, err)
+			} else {
+				syscall.Kill(pid, syscall.SIGTERM)
+			}
+		}
+		return nil
 	},
 }
 

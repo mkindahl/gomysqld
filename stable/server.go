@@ -219,6 +219,20 @@ func (stable *Stable) newServer(name string, dist *Dist) (*Server, error) {
 	return server, nil
 }
 
+func (stable *Stable) FindMatchingServers(pattern string) ([]*Server, error) {
+	var servers []*Server
+
+	for name, srv := range stable.Server {
+		matched, err := filepath.Match(pattern, name)
+		if err != nil {
+			return nil, err
+		} else if matched {
+			servers = append(servers, srv)
+		}
+	}
+	return servers, nil
+}
+
 // setup will create all the necessary directories and files for a
 // fully functional server. In the event of an error, no files will be
 // cleaned up: that is the responsibility of the caller.
