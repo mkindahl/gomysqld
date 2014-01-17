@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	ErrNoServerName = errors.New("No server name provided")
-	ErrTooManyArgs  = errors.New("Too many arguments provided")
+	ErrNoServerName   = errors.New("No server name provided")
+	ErrTooManyArgs    = errors.New("Too many arguments provided")
+	ErrNoFormatString = errors.New("No format string provided")
 )
 
 var srvGrp = cmd.Group{
@@ -23,6 +24,45 @@ var srvGrp = cmd.Group{
 
 	Description: `All commands for manipulating and working with
 	server instances are in this group.`,
+}
+
+var fmtServerCmd = cmd.Command{
+	Brief: "Generate a formatted string based on server information",
+
+	Description: `This command can be used to generate one
+	formatted string for each server that matches the pattern. It
+	can be used to generate information for scripts or for other
+	purposes.
+
+        The FMT is a string where any occurance of the pattern
+        '{name}' will be substituted with that named field in the
+        Server structure. For example, the string '{Host}:{Port}' will
+        generate a host-port pair for each server.
+
+        Each server produces a single line, so keep that in mind when
+        you write your scripts.`,
+
+	Synopsis: "FMT [PATTERN ...]",
+	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
+		if len(args) == 0 {
+			return ErrNoFormatString
+		}
+
+		// Find matching servers
+		servers, err := ctx.Stable.FindMatchingServers(args[1:])
+		if err != nil {
+			return err
+		} else if len(servers) == 0 {
+			return fmt.Errorf("No servers matching %q", args[1:])
+		}
+
+		// Generate the strings
+		for _, srv := range servers {
+			fmt.Println(srv.FormatString(args[0]))
+		}
+
+		return nil
+	},
 }
 
 var addServerCmd = cmd.Command{
@@ -107,7 +147,7 @@ var removeServerCmd = cmd.Command{
 	removed. Before the servers are removed, they will be
 	stopped.`,
 
-	Synopsis: "PAT",
+	Synopsis: "PATTERN ...",
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		if len(args) > 1 {
 			return ErrTooManyArgs
@@ -116,7 +156,7 @@ var removeServerCmd = cmd.Command{
 		}
 
 		// Find matching servers
-		servers, err := ctx.Stable.FindMatchingServers(args[0])
+		servers, err := ctx.Stable.FindMatchingServers(args[:])
 		if err != nil {
 			return err
 		} else if len(servers) == 0 {
@@ -167,14 +207,14 @@ var startServerCmd = cmd.Command{
 	background. If any options are provided in addition to the name, they
 	will be added to the list of options when starting the server.`,
 
-	Synopsis: "PAT OPTION ...",
+	Synopsis: "PATTERN OPTION ...",
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		if len(args) == 0 {
 			return ErrNoServerName
 		}
 
 		// Fetch the server from the stable
-		servers, err := ctx.Stable.FindMatchingServers(args[0])
+		servers, err := ctx.Stable.FindMatchingServers(args[:1])
 		if err != nil {
 			return err
 		} else if len(servers) == 0 {
@@ -209,7 +249,7 @@ var stopServerCmd = cmd.Command{
 	machine. If an attempt to shut down a server on a remote machine is
 	done, an error will currently be thrown.`,
 
-	Synopsis: "PAT",
+	Synopsis: "PATTERN",
 	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
 		if len(args) == 0 {
 			return ErrNoServerName
@@ -218,7 +258,7 @@ var stopServerCmd = cmd.Command{
 		}
 
 		// Fetch matching servers from the stable
-		servers, err := ctx.Stable.FindMatchingServers(args[0])
+		servers, err := ctx.Stable.FindMatchingServers(args[:1])
 		if err != nil {
 			return err
 		} else if len(servers) == 0 {
@@ -303,4 +343,5 @@ func init() {
 	context.RegisterCommand([]string{"server", "show"}, &showServersCmd)
 	context.RegisterCommand([]string{"server", "start"}, &startServerCmd)
 	context.RegisterCommand([]string{"server", "stop"}, &stopServerCmd)
+	context.RegisterCommand([]string{"server", "fmt"}, &fmtServerCmd)
 }

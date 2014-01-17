@@ -107,7 +107,6 @@ func (dt *Dist) unpackDist(root, path string) error {
 	default:
 		return ErrInvalidDist
 	}
-	return nil
 }
 
 const (

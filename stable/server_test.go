@@ -32,6 +32,19 @@ func TestDSN(t *testing.T) {
 	}
 }
 
+func TestFormatString(t *testing.T) {
+	srv := &Server{
+		User: "mats", password: "xyzzy",
+		Host: "localhost", Port: 3306,
+		database: "test",
+	}
+	expect := "This is just localhost on port 3306"
+	result := srv.FormatString("This is just {Host} on port {Port}")
+	if result != expect {
+		t.Errorf("Expected %q, got %q", expect, result)
+	}
+}
+
 func TestAddServer(t *testing.T) {
 	if len(flagDist) == 0 {
 		t.Skip("No distribution provided with -dist flag, skipping test")

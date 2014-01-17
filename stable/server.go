@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -219,17 +221,24 @@ func (stable *Stable) newServer(name string, dist *Dist) (*Server, error) {
 	return server, nil
 }
 
-func (stable *Stable) FindMatchingServers(pattern string) ([]*Server, error) {
+// FindMatchingServers find all servers matching any of the patterns
+// in the slice. The only possible returned error is
+// filepath.ErrBadPattern, which is returned if any of the provided
+// patterns is bad. Otherwise, an array of matcing servers is returned.
+func (stable *Stable) FindMatchingServers(patterns []string) ([]*Server, error) {
 	var servers []*Server
 
-	for name, srv := range stable.Server {
-		matched, err := filepath.Match(pattern, name)
-		if err != nil {
-			return nil, err
-		} else if matched {
-			servers = append(servers, srv)
+	for _, pattern := range patterns {
+		for name, srv := range stable.Server {
+			matched, err := filepath.Match(pattern, name)
+			if err != nil {
+				return nil, err
+			} else if matched {
+				servers = append(servers, srv)
+			}
 		}
 	}
+
 	return servers, nil
 }
 
@@ -317,6 +326,20 @@ func (stable *Stable) DelServer(srv *Server) error {
 
 	delete(stable.Server, srv.Name)
 	return nil
+}
+
+var replRegex = regexp.MustCompile(`\{\w+\}`)
+
+// fmtString will produce a formatted string from the server
+// fields. This can probably be generalized to any interface type.
+func (srv *Server) FormatString(format string) string {
+	rsrv := reflect.Indirect(reflect.ValueOf(srv))
+	res := replRegex.ReplaceAllFunc([]byte(format), func(m []byte) []byte {
+		name := string(m[1 : len(m)-1])
+		str := fmt.Sprintf("%v", rsrv.FieldByName(name).Interface())
+		return []byte(str)
+	})
+	return string(res)
 }
 
 // Status will return the status of the server.

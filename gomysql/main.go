@@ -14,7 +14,9 @@ var brief = "Utility for managing a stable of MySQL servers"
 
 var description = `Easy creation and distribution of MySQL
 servers. The utility support running different versions of servers at
-the same time.`
+the same time.
+
+To get help, use the 'help' command.`
 
 var context *cmd.Context = cmd.NewContext(brief, description)
 
