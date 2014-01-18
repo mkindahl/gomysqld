@@ -7,7 +7,7 @@ package stable
 
 import (
 	"flag"
-	"log"
+	"mysqld/log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -118,7 +118,7 @@ func TestDistSetup(t *testing.T) {
 		t.Errorf("Version %v expected, was %v", flagVersion, dist.Version)
 	}
 
-	log.Printf("Distribution with name %q created", dist.Name)
+	log.Debugf("Distribution with name %q created", dist.Name)
 	if len(dist.Name) == 0 {
 		t.Errorf("Name was expected, none assigned")
 	}

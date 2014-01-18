@@ -8,7 +8,7 @@ package stable
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
+	"mysqld/log"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -137,7 +137,7 @@ func newStable(path string) (*Stable, error) {
 // stored under the "server" directory, where there is one directory
 // for each server.
 func (stable *Stable) setup() error {
-	log.Printf("Creating files and directories for stable in %q", stable.Root)
+	log.Debugf("Creating files and directories for stable in %q", stable.Root)
 
 	// Create the stable directory
 	if err := os.Mkdir(stable.Root, 0755); err != nil {
@@ -165,7 +165,7 @@ func (stable *Stable) setup() error {
 }
 
 func (stable *Stable) teardown() error {
-	log.Printf("Destroying stable in %q\n", stable.Root)
+	log.Infof("Destroying stable in %q\n", stable.Root)
 	return os.RemoveAll(stable.Root)
 }
 
@@ -177,7 +177,7 @@ func CreateStable(path string) (*Stable, error) {
 		return nil, err
 	}
 
-	log.Printf("Creating stable in %q", stable.Root)
+	log.Infof("Creating stable in %q", stable.Root)
 
 	if err := stable.setup(); err != nil {
 		return nil, err
@@ -194,7 +194,7 @@ func CreateStable(path string) (*Stable, error) {
 // successful, a new stable is returned.
 func OpenStable(path string) (*Stable, error) {
 	stable, err := newStable(path)
-	log.Printf("Opening stable in %q", stable.Root)
+	log.Infof("Opening stable in %q", stable.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +205,6 @@ func OpenStable(path string) (*Stable, error) {
 }
 
 func (stable *Stable) Destroy() error {
-	log.Printf("Destroying stable in %q", stable.Root)
+	log.Infof("Destroying stable in %q", stable.Root)
 	return stable.teardown()
 }

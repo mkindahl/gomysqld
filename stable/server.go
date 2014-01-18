@@ -3,8 +3,8 @@ package stable
 import (
 	"fmt"
 	"io"
-	"log"
 	"mysqld/cnf"
+	"mysqld/log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,7 +77,7 @@ var sqlFiles = []string{
 
 // createBootstrap will create a bootstrap file for the server.
 func (srv *Server) writeBootstrapFile(bs *os.File) error {
-	log.Printf("Creating bootstrap file %q\n", bs.Name())
+	log.Debugf("Creating bootstrap file %q\n", bs.Name())
 
 	// Write the header to the bootstrap file
 	header := []string{
@@ -131,7 +131,7 @@ func (srv *Server) bootstrap() error {
 	cmd.Stdin = bsSql
 	cmd.Stdout = bsLog
 	cmd.Stderr = bsLog
-	log.Print("Bootstrapping using", cmd.Args)
+	log.Debug("Bootstrapping using", cmd.Args)
 	if err := cmd.Run(); err != nil {
 		return err
 	}

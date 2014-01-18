@@ -44,14 +44,15 @@ func (err *RunError) PrintHelp(w io.Writer) {
 // executing.
 type Context struct {
 	RootDir string
-	Top     *Group
 	Stable  *stable.Stable
+
+	tree *Group
 }
 
 // NewContext will create a new context.
 func NewContext(summary, description string) *Context {
 	context := &Context{
-		Top: &Group{
+		tree: &Group{
 			Brief:       summary,
 			Description: description,
 			subgroup:    make(map[string]Node),
@@ -66,7 +67,7 @@ func NewContext(summary, description string) *Context {
 // hold a group, while the last word should not be registered for the
 // group.
 func (ctx *Context) RegisterCommand(words []string, cmd *Command) {
-	err := ctx.Top.Register(words, cmd)
+	err := ctx.tree.Register(words, cmd)
 	if err == nil {
 		cmd.setup(words)
 	} else {
@@ -81,7 +82,7 @@ func (ctx *Context) RegisterGroup(words []string, grp *Group) {
 	if grp.subgroup == nil {
 		grp.subgroup = make(map[string]Node)
 	}
-	err := ctx.Top.Register(words, grp)
+	err := ctx.tree.Register(words, grp)
 	if err == nil {
 		grp.path = make([]string, len(words))
 		copy(grp.path, words)
@@ -100,7 +101,7 @@ func (ctx *Context) RegisterGroup(words []string, grp *Group) {
 // node containing the first mismatch (this will always be a group)
 // and the remaining words that could not be matched.
 func (ctx *Context) Locate(words []string) (*Command, Node, []string) {
-	return ctx.Top.Locate(words)
+	return ctx.tree.Locate(words)
 }
 
 // RunCommand will run the command given by the words. In the event of
@@ -109,7 +110,7 @@ func (ctx *Context) Locate(words []string) (*Command, Node, []string) {
 func (ctx *Context) RunCommand(words []string) *RunError {
 	// Locate the command and compute the arguments to the command
 	// by recursively going through the command tree.
-	cmd, node, args := ctx.Top.Locate(words)
+	cmd, node, args := ctx.tree.Locate(words)
 	if cmd == nil {
 		// Find the first unrecognized word, or if all words
 		// are recognized, find the last word in the list.
@@ -125,4 +126,8 @@ func (ctx *Context) RunCommand(words []string) *RunError {
 		return &RunError{Err: err, Where: node}
 	}
 	return nil
+}
+
+func (ctx *Context) PrintHelp(w io.Writer) {
+	ctx.tree.PrintHelp(w)
 }

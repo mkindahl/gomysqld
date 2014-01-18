@@ -17,7 +17,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
+	"mysqld/log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -93,7 +93,7 @@ func pathType(path string) DistType {
 // distributions. If this function finishes successfully, nil is
 // returned, otherwise, an error is returned.
 func (dt *Dist) unpackDist(root, path string) error {
-	log.Printf("Unpacking distribution %s into %s\n", path, root)
+	log.Infof("Unpacking distribution %s into %s\n", path, root)
 	switch pathType(path) {
 	case TGZ_PATH:
 		return dt.unpackTar(root, path)
