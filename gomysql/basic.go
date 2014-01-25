@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"mysqld/cmd"
 	"mysqld/stable"
 )
+
+var version = "0.1.0"
 
 var initCmd = cmd.Command{
 	Brief: "Initialize the MySQL Server stable",
@@ -47,6 +50,18 @@ var initCmd = cmd.Command{
 	},
 }
 
+var versionCmd = cmd.Command{
+	Brief: "Show tool version",
+
+	Description: "This command will show the version of the tool.",
+	SkipStable: true,
+	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
+		fmt.Printf("%s version %s\n", os.Args[0], version)
+		return nil
+	},
+}
+
 func init() {
 	context.RegisterCommand([]string{"init"}, &initCmd)
+	context.RegisterCommand([]string{"version"}, &versionCmd)
 }
