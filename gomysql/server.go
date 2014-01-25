@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"mysqld/cmd"
+	"mysqld/log"
 	"mysqld/stable"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ var (
 	ErrNoServerName   = errors.New("No server name provided")
 	ErrTooManyArgs    = errors.New("Too many arguments provided")
 	ErrNoFormatString = errors.New("No format string provided")
+	ErrTooManyServers = errors.New("More than one server matches")
 )
 
 var srvGrp = cmd.Group{
@@ -286,6 +288,87 @@ var stopServerCmd = cmd.Command{
 	},
 }
 
+var clientServerCmd = cmd.Command{
+	Brief: "Connect to a server as a client",
+
+	Description: `Command is used to connect to a server and
+	execute commands there.
+
+        The command will open a prompt to that server.`,
+
+	Synopsis: "[ OPTION ] SERVER",
+	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
+		// Find matching servers
+		servers, err := ctx.Stable.FindMatchingServers(args[0:1])
+		if err != nil {
+			return err
+		} else if len(servers) == 0 {
+			return fmt.Errorf("No servers matching %q", args[0])
+		} else if len(servers) > 1 {
+			return fmt.Errorf("Pattern %q match more than one server", args[0])
+		}
+
+		log.Debugf("Found matching servers %v", servers)
+
+		// Providing more than one server and not a command is
+		// not allowed. We don't support sending SQL to
+		// multiple servers using a command prompt (yet).
+		if len(args) == 1 && len(servers) > 1 {
+			return ErrTooManyServers
+		}
+
+		return servers[0].Connect()
+	},
+
+	Init: func(cmd *cmd.Command) {
+		cmd.Flags.String("database", "test", "Database to use when connecting")
+	},
+}
+
+var executeServerCmd = cmd.Command{
+	Brief: "Connect to a server and execute commands",
+
+	Description: `Command is used to execute statements towards
+	one or more servers. The SQL provided on to the command will
+	be sent to all servers matching the pattern.
+
+        The result set from the execution of each command will be
+        printed to the user.`,
+
+	Synopsis: "[ OPTION ] PATTERN CMD ...",
+	Body: func(ctx *cmd.Context, cmd *cmd.Command, args []string) error {
+		// Find matching servers
+		servers, err := ctx.Stable.FindMatchingServers(args[0:1])
+		if err != nil {
+			return err
+		} else if len(servers) == 0 {
+			return fmt.Errorf("No servers matching %q", args[0])
+		}
+
+		log.Debugf("Found matching servers %v", servers)
+
+		// Providing more than one server and not a command is
+		// not allowed. We don't support sending SQL to
+		// multiple servers using a command prompt (yet).
+		if len(args) == 1 && len(servers) > 1 {
+			return ErrTooManyServers
+		}
+
+		for _, srv := range servers {
+			fmt.Printf("\n%s> %s\n", srv.Name, strings.Join(args[1:], " "))
+			err := srv.Execute(args[1:]...)
+			if err != nil {
+				log.Errorf("Execute: %s", err)
+			}
+		}
+		return nil
+	},
+
+	Init: func(cmd *cmd.Command) {
+		cmd.Flags.String("database", "test", "Database to use when connecting")
+	},
+}
+
 // forkDaemon will start a server as a daemon. The path to the binary
 // is given in binPath, the directory where the server should run is
 // given in runDir, and the path where the standard output and
@@ -344,4 +427,6 @@ func init() {
 	context.RegisterCommand([]string{"server", "start"}, &startServerCmd)
 	context.RegisterCommand([]string{"server", "stop"}, &stopServerCmd)
 	context.RegisterCommand([]string{"server", "fmt"}, &fmtServerCmd)
+	context.RegisterCommand([]string{"server", "client"}, &clientServerCmd)
+	context.RegisterCommand([]string{"server", "execute"}, &executeServerCmd)
 }

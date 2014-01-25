@@ -12,8 +12,10 @@ import (
 func TestDSN(t *testing.T) {
 	var expected string
 	tcp := &Server{
-		User: "mats", password: "xyzzy",
-		Host: "localhost", Port: 3306,
+		User:     "mats",
+		Password: "xyzzy",
+		Host:     "localhost",
+		Port:     3306,
 		database: "test",
 	}
 	expected = "mats:xyzzy@tcp(localhost:3306)/test"
@@ -22,7 +24,8 @@ func TestDSN(t *testing.T) {
 	}
 
 	unix := &Server{
-		User: "mats", password: "xyzzy",
+		User:     "mats",
+		Password: "xyzzy",
 		Socket:   "/var/run/mysqld/mysqld.sock",
 		database: "test",
 	}
@@ -34,8 +37,10 @@ func TestDSN(t *testing.T) {
 
 func TestFormatString(t *testing.T) {
 	srv := &Server{
-		User: "mats", password: "xyzzy",
-		Host: "localhost", Port: 3306,
+		User:     "mats",
+		Password: "xyzzy",
+		Host:     "localhost",
+		Port:     3306,
 		database: "test",
 	}
 	expect := "This is just localhost on port 3306"

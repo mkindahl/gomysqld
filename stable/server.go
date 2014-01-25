@@ -14,26 +14,14 @@ import (
 	"strings"
 )
 
-// Server structure contain all information about a server.
-type Server struct {
-	Name, Host, Socket        string
-	BaseDir, DataDir          string
-	ConfigFile                string
-	BinPath, LogPath, PidPath string
-	ServerId, Port            int
-	Options                   *cnf.Config
-	User, password, database  string
-	Dist                      *Dist
-}
+// Status is the status of a server. It overloads the String()
+// function to be possible to use in contexts requiring a string.
+type Status int
 
 var statusString = []string{
 	"Stopped",
 	"Running",
 }
-
-// Status is the status of a server. It overloads the String()
-// function to be possible to use in contexts requiring a string.
-type Status int
 
 func (s Status) String() string {
 	return statusString[s]
@@ -43,6 +31,22 @@ const (
 	SERVER_UNAVAIL = iota
 	SERVER_RUNNING
 )
+
+// Server structure contain all information about a server.
+type Server struct {
+	Name, Host, Socket        string
+	BaseDir, DataDir          string
+	ConfigFile                string
+	BinPath, LogPath, PidPath string
+	ServerId, Port            int
+	Options                   *cnf.Config
+	User, Password, database  string
+	Dist                      *Dist
+}
+
+func (srv *Server) String() string {
+	return srv.Name
+}
 
 // bin will return the path to the name of a binary for the server.
 func (srv *Server) bin(name string) string {
@@ -69,10 +73,38 @@ func (srv *Server) run(name string) string {
 
 // sqlFiles list the files necessary for bootstrapping a fresh server.
 var sqlFiles = []string{
-	"share/mysql_system_tables.sql",
-	"share/mysql_system_tables_data.sql",
-	"share/mysql_test_data_timezone.sql",
-	"share/fill_help_tables.sql",
+	"mysql_system_tables.sql",
+	"mysql_system_tables_data.sql",
+	"mysql_test_data_timezone.sql",
+	"fill_help_tables.sql",
+}
+
+var bsHeader = []string{
+	"SET SESSION SQL_LOG_BIN = 0;",
+	"CREATE DATABASE IF NOT EXISTS mysql;",
+	"CREATE DATABASE IF NOT EXISTS test;",
+	"USE mysql;",
+}
+
+var bsFooter = []string{
+	"DELETE FROM mysql.user WHERE user = '';",
+}
+
+// appendLines will write the provided lines, newline-terminated, to
+// the writer. If an error occurs when writing any of the lines, the
+// writing will stop there and the error returned. This means that you
+// have to make sure to clean up anything that could be partially
+// written. In either case, the number of lines successfully written
+// will be returned.
+func appendLines(wr io.Writer, lines []string) (int, error) {
+	count := 0
+	for _, line := range lines {
+		if _, err := fmt.Fprintln(wr, line); err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, nil
 }
 
 // createBootstrap will create a bootstrap file for the server.
@@ -80,19 +112,13 @@ func (srv *Server) writeBootstrapFile(bs *os.File) error {
 	log.Debugf("Creating bootstrap file %q\n", bs.Name())
 
 	// Write the header to the bootstrap file
-	header := []string{
-		"SET SESSION SQL_LOG_BIN = 0;",
-		"CREATE DATABASE IF NOT EXISTS mysql;",
-		"CREATE DATABASE IF NOT EXISTS test;",
-		"USE mysql;",
-	}
-	for _, line := range header {
-		fmt.Fprintln(bs, line)
+	if _, err := appendLines(bs, bsHeader); err != nil {
+		return err
 	}
 
 	// Append bootstrap files from distribution
 	for _, fname := range sqlFiles {
-		fullname := filepath.Join(srv.Dist.Root, fname)
+		fullname := filepath.Join(srv.Dist.Root, "share", fname)
 		rd, err := os.Open(fullname)
 		if err != nil {
 			return err
@@ -103,6 +129,12 @@ func (srv *Server) writeBootstrapFile(bs *os.File) error {
 			return err
 		}
 	}
+
+	// Append the footer lines to the bootstrap file
+	if _, err := appendLines(bs, bsFooter); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -138,9 +170,9 @@ func (srv *Server) bootstrap() error {
 	return nil
 }
 
-// maybeSetDynamicFields will set the dynamic fields of the server if
-// they are not already set. Tis is also used to handle updgrade of
-// the configuration file when new fields are added.
+// fixDynamicFields will set the dynamic fields of the server if they
+// are not already set. This is also used to handle updgrade of the
+// configuration file when new fields are added.
 func (srv *Server) fixDynamicFields() {
 	if len(srv.BinPath) == 0 {
 		srv.BinPath = srv.bin("mysqld")
@@ -177,6 +209,7 @@ func (stable *Stable) newServer(name string, dist *Dist) (*Server, error) {
 		ServerId:   serverId,
 		Options:    cnf.New(),
 		Dist:       dist,
+		User:       "root",
 	}
 
 	// Set up dynamic fields
@@ -206,6 +239,10 @@ func (stable *Stable) newServer(name string, dist *Dist) (*Server, error) {
 			"port":     strconv.Itoa(server.Port),
 			"prompt":   "'" + name + "> '",
 		},
+	}
+
+	if dist.Version >= "5.1.6" {
+		option["mysqld"]["log-output"] = "file"
 	}
 
 	// Set up the language configuration correctly for the version of the server.
@@ -354,7 +391,8 @@ func (srv *Server) Status() Status {
 }
 
 // Pid will get the server PID from the PID file, or return an error
-// if the PID cannot be retrieved for some reason.
+// if the PID cannot be retrieved for some reason (such as that the
+// file cannot be read, or does not exist).
 func (srv *Server) Pid() (int, error) {
 	if _, err := os.Stat(srv.PidPath); err != nil {
 		return -1, fmt.Errorf("Server %q not running", srv.Name)
@@ -378,9 +416,50 @@ func (srv *Server) IsLocal() bool {
 }
 
 func (s *Server) SocketDsn() string {
-	return fmt.Sprintf("%v:%v@unix(%v)/%v", s.User, s.password, s.Socket, s.database)
+	return fmt.Sprintf("%v:%v@unix(%v)/%v", s.User, s.Password, s.Socket, s.database)
 }
 
 func (s *Server) TcpDsn() string {
-	return fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", s.User, s.password, s.Host, s.Port, s.database)
+	return fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", s.User, s.Password, s.Host, s.Port, s.database)
+}
+
+// mysqlArgs return an array of default arguments for using a mysql
+// client with the server.
+func (srv *Server) mysqlArgs(args ...string) []string {
+	argv := []string{
+		fmt.Sprintf("-S%s", srv.Socket),
+		fmt.Sprintf("-h%s", srv.Host),
+		fmt.Sprintf("-P%d", srv.Port),
+	}
+	if len(srv.User) > 0 {
+		argv = append(argv, fmt.Sprintf("-u%s", srv.User))
+	}
+	if len(srv.Password) > 0 {
+		argv = append(argv, fmt.Sprintf("-p%s", srv.Password))
+	}
+
+	return append(argv, args...)
+}
+
+// Execute is used to execute a command using the mysql client for the
+// server and return the result.
+func (srv *Server) Execute(commands ...string) error {
+	argv := srv.mysqlArgs("-e" + strings.Join(commands, ";"))
+	cmd := exec.Command(srv.bin("mysql"), argv...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	log.Debugf("Executing %v", cmd.Args)
+	return cmd.Run()
+}
+
+// Connect is used to connect a terminal to the server and run a
+// prompt.
+func (srv *Server) Connect(args ...string) error {
+	argv := srv.mysqlArgs(args...)
+	cmd := exec.Command(srv.bin("mysql"), argv...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	log.Debugf("Executing %v", srv.Name, cmd.Args)
+	return cmd.Run()
 }
