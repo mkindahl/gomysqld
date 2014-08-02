@@ -1,13 +1,10 @@
-Package `mysqld`
-================
+GoMySQL and packages `mysqld` 
+=============================
 
 Library for working with MySQL server instances from within a Go
 program. Note that this is not a MySQL *client* program; it is not
 used to connect to MySQL servers. You have to use some other library
 for that.
-
-The library is distributed under the BSD License. See license text
-below.
 
 You can use the `go get` command to download and install the package
 from from github.com:
@@ -84,6 +81,7 @@ Developer Notes
 If you want to work with the code, there are a few suggestions in this
 section.
 
+
 ### Running tests
 
 Some tests require a distribution to execute. For those tests, a
@@ -97,3 +95,17 @@ distribution, use the `-version` flag:
 
 Tests that require a distribution or an expected version to work will
 be skipped if no distribution or expected version is provided.
+
+
+Contributors
+============
+ 
+This package was written by Mats Kindahl (mats.kindahl@oracle.com).
+
+License
+=======
+
+This software is released under the version 2 of the GNU General
+Public License.
+
+License information can be found in the LICENSE.txt file.

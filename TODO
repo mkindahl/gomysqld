@@ -1,0 +1,6 @@
+
+* Cross-stable support
+- Add support so that several stables on a machine do not interfere
+   with each others
+
+

@@ -1,16 +1,28 @@
-/*
+// Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
 
-Package `mysqld/stable` is used to create and destroy new servers for
-testing, experimentation, and benchmarking.
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
 
-To create servers, it is first necessary to create a stable that will
-contain the distributions and servers for the experiment. The stable is
-just a directory where information will be stored. Once a stable is
-either created to loaded, you can add distributions. The distributions
-contain the actual server code and and added by using a binary
-distribution either as a tar file, a zip file, or a directory.
+// This program is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// General Public License for more details.
 
-*/
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301
+// USA
+
+// Package `mysqld/stable` is used to create and destroy new servers for
+// testing, experimentation, and benchmarking.
+//
+// To create servers, it is first necessary to create a stable that will
+// contain the distributions and servers for the experiment. The stable is
+// just a directory where information will be stored. Once a stable is
+// either created to loaded, you can add distributions. The distributions
+// contain the actual server code and and added by using a binary
+// distribution either as a tar file, a zip file, or a directory.
 package stable
 
 import (
